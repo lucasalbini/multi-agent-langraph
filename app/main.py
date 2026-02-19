@@ -25,16 +25,24 @@ async def handle_webhook(request: Request):
     key = data.get("key", {})
     from_me = key.get("fromMe", False)
     sender = key.get("remoteJid", "")
+    source = data.get("source", "")
+    own_number = body.get("sender", "")
     text = (
         data.get("message", {}).get("conversation", "")
         or data.get("message", {}).get("extendedTextMessage", {}).get("text", "")
     )
     push_name = data.get("pushName", "")
 
-    if from_me or not sender or not text:
+    # Self-chat: fromMe=True, mas enviado do celular (não pela API) para o próprio número
+    is_self_chat = from_me and sender == own_number and source in ("android", "ios")
+
+    if not is_self_chat and from_me:
         return {"status": "ignored"}
 
-    if settings.allowed_group_jid and sender != settings.allowed_group_jid:
+    if not sender or not text:
+        return {"status": "ignored"}
+
+    if settings.allowed_group_jid and sender != settings.allowed_group_jid and not is_self_chat:
         return {"status": "ignored"}
 
     logger.info("[%s] %s: %s", sender, push_name, text[:100])
